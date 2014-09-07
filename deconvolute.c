@@ -74,8 +74,13 @@ void copy_images_to_opencl()
 {
 	int i;
 
-	int dimensions[] = {width, height};
-	int psf_dimensions[] = {psf_width, psf_height};
+	dimensions = emalloc(2 * sizeof(*dimensions));
+	psf_dimensions = emalloc(2 * sizeof(*psf_dimensions));
+
+	dimensions[0] = width;
+	dimensions[1] = height;
+	psf_dimensions[0] = psf_width;
+	psf_dimensions[1] = psf_height;
 
 	for (i = 0; i < 3; i++) {
 		k_image_a[i] = clCreateBuffer(context,
@@ -93,6 +98,12 @@ void copy_images_to_opencl()
 		k_temp_image[i] = clCreateBuffer(context,
 				CL_MEM_READ_WRITE, width * height *
 				sizeof(cl_float), NULL, NULL);
+		k_dimensions[i] = clCreateBuffer(context,
+				CL_MEM_READ_ONLY, 2 * sizeof(cl_int),
+				NULL, NULL);
+		k_psf_dimensions[i] = clCreateBuffer(context,
+				CL_MEM_READ_ONLY, 2 * sizeof(cl_int),
+				NULL, NULL);
 
 		clEnqueueWriteBuffer(queue, k_image_a[i], CL_TRUE, 0,
 				width * height * sizeof(cl_float),
@@ -123,8 +134,6 @@ void do_iteration(int i)
 	cl_mem *k_input_image;
 	cl_mem *k_output_image;
 
-	size_t global_work_size[] = {width, height};
-
 	if (i%2 == 0) {
 		k_input_image = k_image_a;
 		k_output_image = k_image_b;
@@ -147,14 +156,17 @@ void do_iteration(int i)
 				&k_psf_dimensions[j]);
 
 		if (i == 0) {
-		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
-				NULL, global_work_size, NULL, 5,
-				copy_events[j], &kernel_events[j][0]);
+			clEnqueueNDRangeKernel(queue,
+					convolution_kernel[j], 2, NULL,
+					global_work_size, NULL, 5,
+					copy_events[j],
+					&kernel_events[j][0]);
 		} else {
-		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
-				NULL, global_work_size, NULL, 1,
-				&kernel_events[j][1],
-				&kernel_events[j][0]);
+			clEnqueueNDRangeKernel(queue,
+					convolution_kernel[j], 2, NULL,
+					global_work_size, NULL, 1,
+					&kernel_events[j][1],
+					&kernel_events[j][0]);
 		}
 
 		/* deconvolution part */
@@ -197,8 +209,12 @@ void cleanup()
 	free(normalized_input_image);
 	free(normalized_psf_image);
 	free(normalized_output_image);
+	
+	free(dimensions);
+	free(psf_dimensions);
 
 	/* free opencl things */
+	free(global_work_size);
 
 	for (i = 0; i < 3; i++) {
 		clReleaseKernel(convolution_kernel[i]);
@@ -250,6 +266,9 @@ int main(int argc, char *argv[])
 	copy_images_to_opencl();
 
 	/* do the main deconvolution computations */
+	global_work_size = emalloc(2 * sizeof(*global_work_size));
+	global_work_size[0] = width;
+	global_work_size[1] = height;
 	for (i = 0; i < n_iterations; i++) {
 		printf("Pass %d...\n", i);
 		fflush(stdout);

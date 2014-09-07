@@ -1,4 +1,4 @@
-__kernel deconvolute(__global float *input_image, __global float
+__kernel void deconvolute(__global float *input_image, __global float
 		*psf_image, __global float *output_image, __global float
 		*temp_image, __global float *original_image, __global
 		int *dimensions, __global int *psf_dimensions)
@@ -37,7 +37,7 @@ __kernel deconvolute(__global float *input_image, __global float
 	output_image[y * dimensions[0] + x] = total;
 }
 
-__kernel convolute(__global float *input_image, __global float
+__kernel void convolute(__global float *input_image, __global float
 		*psf_image, __global float *temp_image, __global int
 		*dimensions, __global int *psf_dimensions)
 {

@@ -11,7 +11,9 @@
 #define N_ITERATIONS 10
 
 int width, height; /* dimensions of image to be deconvoluted */
+int *dimensions; /* same thing, but suitable for copying to opencl */
 int psf_width, psf_height; /* dimensions of psf */
+int *psf_dimensions; /* same thing, but suitable for copying to opencl */
 uint16_t *input_image; /* image to be deconvoluted in RGBRGBRGB format */
 uint8_t *psf_image;
 uint16_t *output_image; /* deconvoluted image in RGBRGBRGB format */
@@ -23,6 +25,7 @@ float **normalized_psf_image;
 float **normalized_output_image;
 
 /* opencl vars */
+size_t *global_work_size;
 cl_device_id device;
 cl_context context;
 cl_command_queue queue;
