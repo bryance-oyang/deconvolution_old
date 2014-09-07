@@ -23,6 +23,7 @@ float **normalized_psf_image;
 float **normalized_output_image;
 
 /* opencl vars */
+cl_device_id device;
 cl_context context;
 cl_command_queue queue;
 cl_program program;

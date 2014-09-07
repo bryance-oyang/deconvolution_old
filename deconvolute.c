@@ -119,8 +119,11 @@ void copy_images_to_opencl()
 
 void do_iteration(int i)
 {
+	int j;
 	cl_mem *k_input_image;
 	cl_mem *k_output_image;
+
+	size_t global_work_size[] = {width, height};
 
 	if (i%2 == 0) {
 		k_input_image = k_image_a;
@@ -130,7 +133,51 @@ void do_iteration(int i)
 		k_output_image = k_image_a;
 	}
 
+	for (j = 0; j < 3; j++) {
+		/* convolution part */
+		clSetKernelArg(convolution_kernel[j], 0, sizeof(cl_mem),
+				&k_input_image[j]);
+		clSetKernelArg(convolution_kernel[j], 1, sizeof(cl_mem),
+				&k_psf_image[j]);
+		clSetKernelArg(convolution_kernel[j], 2, sizeof(cl_mem),
+				&k_temp_image[j]);
+		clSetKernelArg(convolution_kernel[j], 3, sizeof(cl_mem),
+				&k_dimensions[j]);
+		clSetKernelArg(convolution_kernel[j], 4, sizeof(cl_mem),
+				&k_psf_dimensions[j]);
 
+		if (i == 0) {
+		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
+				NULL, global_work_size, NULL, 5,
+				copy_events[j], &kernel_events[j][0]);
+		} else {
+		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
+				NULL, global_work_size, NULL, 1,
+				&kernel_events[j][1],
+				&kernel_events[j][0]);
+		}
+
+		/* deconvolution part */
+		clSetKernelArg(deconvolution_kernel[j], 0,
+				sizeof(cl_mem), &k_input_image);
+		clSetKernelArg(deconvolution_kernel[j], 1,
+				sizeof(cl_mem), &k_psf_image);
+		clSetKernelArg(deconvolution_kernel[j], 2,
+				sizeof(cl_mem), &k_output_image);
+		clSetKernelArg(deconvolution_kernel[j], 3,
+				sizeof(cl_mem), &k_temp_image);
+		clSetKernelArg(deconvolution_kernel[j], 4,
+				sizeof(cl_mem), &k_original_image);
+		clSetKernelArg(deconvolution_kernel[j], 5,
+				sizeof(cl_mem), &k_dimensions);
+		clSetKernelArg(deconvolution_kernel[j], 6,
+				sizeof(cl_mem), &k_psf_dimensions);
+
+		clEnqueueNDRangeKernel(queue, deconvolution_kernel[j],
+				2, NULL, global_work_size, NULL, 1,
+				&kernel_events[j][0],
+				&kernel_events[j][1]);
+	}
 }
 
 /* free all the things */
@@ -191,8 +238,9 @@ int main(int argc, char *argv[])
 	init_images(argv[1], argv[2]);
 	
 	/* setup opencl stuffies */
-	cl_utils_setup_gpu(&context, &queue);
-	program = cl_utils_create_program("deconvolute.cl", context);
+	cl_utils_setup_gpu(&context, &queue, &device);
+	program = cl_utils_create_program("deconvolute.cl", context,
+			device);
 	for (i = 0; i < 3; i++) {
 		convolution_kernel[i] = clCreateKernel(program, "convolute", NULL);
 		deconvolution_kernel[i] = clCreateKernel(program, "deconvolute", NULL);
