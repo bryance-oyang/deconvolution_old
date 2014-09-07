@@ -53,8 +53,8 @@ void output(char *output_image_filename)
 		clEnqueueReadBuffer(queue, k_image_a[i], CL_TRUE, 0,
 				width * height
 				* sizeof(cl_float),
-				normalized_output_image[i], 2,
-				kernel_events[i], NULL);
+				normalized_output_image[i], 0,
+				NULL, NULL);
 	}
 
 	/* convert floats to uint16_t for tiff output */
@@ -124,6 +124,7 @@ void copy_images_to_opencl()
 		clEnqueueWriteBuffer(queue, k_psf_dimensions[i], CL_FALSE,
 				0, 2 * sizeof(cl_int), psf_dimensions, 0,
 				NULL, &copy_events[i][4]);
+		clWaitForEvents(5, copy_events[i]);
 	}
 
 }
@@ -142,8 +143,8 @@ void do_iteration(int i)
 		k_output_image = k_image_a;
 	}
 
+	/* convolution part */
 	for (j = 0; j < 3; j++) {
-		/* convolution part */
 		clSetKernelArg(convolution_kernel[j], 0, sizeof(cl_mem),
 				&k_input_image[j]);
 		clSetKernelArg(convolution_kernel[j], 1, sizeof(cl_mem),
@@ -158,18 +159,20 @@ void do_iteration(int i)
 		if (i == 0) {
 			clEnqueueNDRangeKernel(queue,
 					convolution_kernel[j], 2, NULL,
-					global_work_size, NULL, 5,
-					copy_events[j],
-					&kernel_events[j][0]);
+					global_work_size, NULL, 0, NULL,
+					&kernel_events[j]);
 		} else {
 			clEnqueueNDRangeKernel(queue,
 					convolution_kernel[j], 2, NULL,
-					global_work_size, NULL, 1,
-					&kernel_events[j][1],
-					&kernel_events[j][0]);
+					global_work_size, NULL, 0, NULL,
+					&kernel_events[j]);
 		}
+	}
 
-		/* deconvolution part */
+	clWaitForEvents(3, kernel_events);
+
+	/* deconvolution part */
+	for (j = 0; j < 3; j++) {
 		clSetKernelArg(deconvolution_kernel[j], 0,
 				sizeof(cl_mem), &k_input_image);
 		clSetKernelArg(deconvolution_kernel[j], 1,
@@ -186,10 +189,11 @@ void do_iteration(int i)
 				sizeof(cl_mem), &k_psf_dimensions);
 
 		clEnqueueNDRangeKernel(queue, deconvolution_kernel[j],
-				2, NULL, global_work_size, NULL, 1,
-				&kernel_events[j][0],
-				&kernel_events[j][1]);
+				2, NULL, global_work_size, NULL, 0,
+				NULL, &kernel_events[j]);
 	}
+
+	clWaitForEvents(3, kernel_events);
 }
 
 /* free all the things */
@@ -270,9 +274,9 @@ int main(int argc, char *argv[])
 	global_work_size[0] = width;
 	global_work_size[1] = height;
 	for (i = 0; i < n_iterations; i++) {
-		printf("Pass %d...\n", i);
-		fflush(stdout);
 		do_iteration(i);
+		printf("Pass %d completed\n", i);
+		fflush(stdout);
 	}
 
 	/* output */
