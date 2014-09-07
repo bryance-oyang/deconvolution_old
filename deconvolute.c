@@ -74,12 +74,18 @@ void copy_images_to_opencl()
 {
 	int i;
 
+	int dimensions[] = {width, height};
+	int psf_dimensions[] = {psf_width, psf_height};
+
 	for (i = 0; i < 3; i++) {
 		k_image_a[i] = clCreateBuffer(context,
 				CL_MEM_READ_WRITE, width * height *
 				sizeof(cl_float), NULL, NULL);
 		k_image_b[i] = clCreateBuffer(context,
 				CL_MEM_READ_WRITE, width * height *
+				sizeof(cl_float), NULL, NULL);
+		k_original_image[i] = clCreateBuffer(context,
+				CL_MEM_READ_ONLY, width * height *
 				sizeof(cl_float), NULL, NULL);
 		k_psf_image[i] = clCreateBuffer(context,
 				CL_MEM_READ_ONLY, psf_width * psf_height
@@ -88,15 +94,27 @@ void copy_images_to_opencl()
 				CL_MEM_READ_WRITE, width * height *
 				sizeof(cl_float), NULL, NULL);
 
-		clEnqueueWriteBuffer(queue, k_image_a[i], CL_FALSE, 0,
+		clEnqueueWriteBuffer(queue, k_image_a[i], CL_TRUE, 0,
 				width * height * sizeof(cl_float),
 				normalized_input_image[i], 0, NULL,
 				&copy_events[i][0]);
+		clEnqueueWriteBuffer(queue, k_original_image[i],
+				CL_FALSE, 0, width * height *
+				sizeof(cl_float),
+				normalized_input_image[i], 0, NULL,
+				&copy_events[i][1]);
 		clEnqueueWriteBuffer(queue, k_psf_image[i], CL_FALSE, 0,
 				psf_width * psf_height * sizeof(cl_float),
 				normalized_psf_image[i], 0, NULL,
-				&copy_events[i][1]);
+				&copy_events[i][2]);
+		clEnqueueWriteBuffer(queue, k_dimensions[i], CL_FALSE,
+				0, 2 * sizeof(cl_int), dimensions, 0,
+				NULL, &copy_events[i][3]);
+		clEnqueueWriteBuffer(queue, k_psf_dimensions[i], CL_FALSE,
+				0, 2 * sizeof(cl_int), psf_dimensions, 0,
+				NULL, &copy_events[i][4]);
 	}
+
 }
 
 void do_iteration(int i)
@@ -143,6 +161,8 @@ void cleanup()
 		clReleaseMemObject(k_image_b[i]);
 		clReleaseMemObject(k_psf_image[i]);
 		clReleaseMemObject(k_temp_image[i]);
+		clReleaseMemObject(k_dimensions[i]);
+		clReleaseMemObject(k_psf_dimensions[i]);
 	}
 
 	clReleaseProgram(program);
