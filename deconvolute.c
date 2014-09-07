@@ -48,6 +48,16 @@ void output(char *output_image_filename)
 {
 	int i;
 
+	/* retrieve result from opencl memory */
+	for (i = 0; i < 3; i++) {
+		clEnqueueReadBuffer(queue, k_image_a[i], CL_TRUE, 0,
+				width * height
+				* sizeof(cl_float),
+				normalized_output_image[i], 2,
+				kernel_events[i], NULL);
+	}
+
+	/* convert floats to uint16_t for tiff output */
 	for (i = 0; i < 3 * width * height; i++) {
 		if (normalized_output_image[i%3][i/3] >= 1) {
 			output_image[i] = UINT16_MAX;
@@ -81,15 +91,15 @@ void copy_images_to_opencl()
 		clEnqueueWriteBuffer(queue, k_image_a[i], CL_FALSE, 0,
 				width * height * sizeof(cl_float),
 				normalized_input_image[i], 0, NULL,
-				&copy_events[0]);
+				&copy_events[i][0]);
 		clEnqueueWriteBuffer(queue, k_psf_image[i], CL_FALSE, 0,
 				psf_width * psf_height * sizeof(cl_float),
 				normalized_psf_image[i], 0, NULL,
-				&copy_events[1]);
+				&copy_events[i][1]);
 	}
 }
 
-void iteration(int i)
+void do_iteration(int i)
 {
 	cl_mem *k_input_image;
 	cl_mem *k_output_image;
@@ -124,7 +134,11 @@ void cleanup()
 	free(normalized_output_image);
 
 	/* free opencl things */
+
 	for (i = 0; i < 3; i++) {
+		clReleaseKernel(convolution_kernel[i]);
+		clReleaseKernel(deconvolution_kernel[i]);
+
 		clReleaseMemObject(k_image_a[i]);
 		clReleaseMemObject(k_image_b[i]);
 		clReleaseMemObject(k_psf_image[i]);
@@ -141,17 +155,40 @@ void cleanup()
  */
 int main(int argc, char *argv[])
 {
+	int i;
+	int n_iterations;
+
 	if (argc != 3) {
 		fprintf(stderr, "Usage: deconvolute [input 16-bit TIFF image] [psf 8-bit TIFF image]\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
+	/* make sure n_iterations is even */
+	n_iterations = N_ITERATIONS + (N_ITERATIONS % 2);
+
+	/* get images and alloc memory */
 	init_images(argv[1], argv[2]);
 	
+	/* setup opencl stuffies */
 	cl_utils_setup_gpu(&context, &queue);
 	program = cl_utils_create_program("deconvolute.cl", context);
+	for (i = 0; i < 3; i++) {
+		convolution_kernel[i] = clCreateKernel(program, "convolute", NULL);
+		deconvolution_kernel[i] = clCreateKernel(program, "deconvolute", NULL);
+	}
 
+	/* alloc opencl memory and copy images over */
+	copy_images_to_opencl();
+
+	/* do the main deconvolution computations */
+	for (i = 0; i < n_iterations; i++) {
+		printf("Pass %d...\n", i);
+		fflush(stdout);
+		do_iteration(i);
+	}
+
+	/* output */
 	output(OUT_FILENAME);
 
 	cleanup();
