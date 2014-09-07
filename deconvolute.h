@@ -8,6 +8,7 @@
 #include "emalloc.h"
 
 #define OUT_FILENAME "deconvoluted_image.tif"
+#define N_ITERATIONS 10
 
 int width, height; /* dimensions of image to be deconvoluted */
 int psf_width, psf_height; /* dimensions of psf */
@@ -25,10 +26,18 @@ float **normalized_output_image;
 cl_context context;
 cl_command_queue queue;
 cl_program program;
+cl_mem k_image_a[3];
+cl_mem k_image_b[3];
+cl_mem k_psf_image[3];
+cl_mem k_temp_image[3];
+cl_event copy_events[2];
+cl_event kernel_events[2];
 
 /* helper functions */
 void init_images(char *input_image_filename, char *psf_image_filename);
 void output(char *output_image_filename);
+void copy_images_to_opencl();
+void iteration(int i);
 void cleanup();
 
 #endif /* !_DECONVOLUTE_H_ */
