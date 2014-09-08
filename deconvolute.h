@@ -19,9 +19,9 @@ uint16_t *output_image; /* deconvoluted image in RGBRGBRGB format */
 /* converted to float images, each channel (RGB) is an array,
    i.e. normalized_input_image[3][width * height]
  */
-float **normalized_input_image;
-float **normalized_psf_image;
-float **normalized_output_image;
+float *normalized_input_image[3];
+float *normalized_psf_image[3];
+float *normalized_output_image[3];
 
 /* opencl vars */
 size_t *global_work_size;

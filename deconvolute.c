@@ -13,12 +13,6 @@ void init_images(char *input_image_filename, char *psf_image_filename)
 	output_image = emalloc(3 * width * height *
 			sizeof(*output_image));
 
-	normalized_input_image = emalloc(3 *
-			sizeof(*normalized_input_image));
-	normalized_psf_image = emalloc(3 *
-			sizeof(*normalized_psf_image));
-	normalized_output_image = emalloc(3 *
-			sizeof(*normalized_output_image));
 	for (i = 0; i < 3; i++) {
 		normalized_input_image[i] = emalloc(width * height *
 				sizeof(*(normalized_input_image[i])));
@@ -203,9 +197,6 @@ void cleanup()
 		free(normalized_psf_image[i]);
 		free(normalized_output_image[i]);
 	}
-	free(normalized_input_image);
-	free(normalized_psf_image);
-	free(normalized_output_image);
 	
 	free(dimensions);
 	free(psf_dimensions);
@@ -219,6 +210,7 @@ void cleanup()
 
 		clReleaseMemObject(k_image_a[i]);
 		clReleaseMemObject(k_image_b[i]);
+		clReleaseMemObject(k_original_image[3]);
 		clReleaseMemObject(k_psf_image[i]);
 		clReleaseMemObject(k_temp_image[i]);
 		clReleaseMemObject(k_dimensions[i]);
