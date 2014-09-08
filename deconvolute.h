@@ -8,6 +8,8 @@
 #include "emalloc.h"
 
 #define OUT_FILENAME "deconvoluted_image.tif"
+#define CHUNK_SIZE 256
+#define WORK_GRP_SIZE 32
 
 int width, height; /* dimensions of image to be deconvoluted */
 int *dimensions; /* same thing, but suitable for copying to opencl */
@@ -25,6 +27,7 @@ float *normalized_output_image[3];
 
 /* opencl vars */
 size_t *global_work_size;
+size_t *local_work_size;
 cl_device_id device;
 cl_context context;
 cl_command_queue queue;

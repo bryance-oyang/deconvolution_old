@@ -152,8 +152,8 @@ void do_iteration(int i)
 				&k_psf_dimensions[j]);
 
 		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
-				NULL, global_work_size, NULL, 0, NULL,
-				&kernel_events[j]);
+				NULL, global_work_size, local_work_size,
+				0, NULL, &kernel_events[j]);
 	}
 
 	clWaitForEvents(3, kernel_events);
@@ -176,8 +176,9 @@ void do_iteration(int i)
 				sizeof(cl_mem), &k_psf_dimensions[j]);
 
 		clEnqueueNDRangeKernel(queue, deconvolution_kernel[j],
-				2, NULL, global_work_size, NULL, 0,
-				NULL, &kernel_events[j]);
+				2, NULL, global_work_size,
+				local_work_size, 0, NULL,
+				&kernel_events[j]);
 	}
 
 	clWaitForEvents(3, kernel_events);
@@ -210,7 +211,7 @@ void cleanup()
 
 		clReleaseMemObject(k_image_a[i]);
 		clReleaseMemObject(k_image_b[i]);
-		clReleaseMemObject(k_original_image[3]);
+		clReleaseMemObject(k_original_image[i]);
 		clReleaseMemObject(k_psf_image[i]);
 		clReleaseMemObject(k_temp_image[i]);
 		clReleaseMemObject(k_dimensions[i]);
@@ -258,6 +259,9 @@ int main(int argc, char *argv[])
 	global_work_size = emalloc(2 * sizeof(*global_work_size));
 	global_work_size[0] = width;
 	global_work_size[1] = height;
+	local_work_size = emalloc(2 * sizeof(*local_work_size));
+	local_work_size[0] = WORK_GRP_SIZE;
+	local_work_size[1] = WORK_GRP_SIZE;
 	for (i = 0; i < n_iterations; i++) {
 		do_iteration(i);
 		printf("Pass %d completed\n", i);
