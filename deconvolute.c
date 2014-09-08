@@ -238,14 +238,14 @@ int main(int argc, char *argv[])
 	int i;
 	int n_iterations;
 
-	if (argc != 3) {
-		fprintf(stderr, "Usage: deconvolute [input 16-bit TIFF image] [psf 8-bit TIFF image]\n");
+	if (argc != 4) {
+		fprintf(stderr, "Usage: deconvolute [input 16-bit TIFF image] [psf 8-bit TIFF image] [number of iterations]\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
 	/* make sure n_iterations is even */
-	n_iterations = N_ITERATIONS + (N_ITERATIONS % 2);
+	n_iterations = atoi(argv[3]) + (atoi(argv[3]) % 2);
 
 	/* get images and alloc memory */
 	init_images(argv[1], argv[2]);
