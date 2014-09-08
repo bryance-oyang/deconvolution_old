@@ -124,6 +124,7 @@ void copy_images_to_opencl()
 		clEnqueueWriteBuffer(queue, k_psf_dimensions[i], CL_FALSE,
 				0, 2 * sizeof(cl_int), psf_dimensions, 0,
 				NULL, &copy_events[i][4]);
+
 		clWaitForEvents(5, copy_events[i]);
 	}
 
@@ -156,17 +157,9 @@ void do_iteration(int i)
 		clSetKernelArg(convolution_kernel[j], 4, sizeof(cl_mem),
 				&k_psf_dimensions[j]);
 
-		if (i == 0) {
-			clEnqueueNDRangeKernel(queue,
-					convolution_kernel[j], 2, NULL,
-					global_work_size, NULL, 0, NULL,
-					&kernel_events[j]);
-		} else {
-			clEnqueueNDRangeKernel(queue,
-					convolution_kernel[j], 2, NULL,
-					global_work_size, NULL, 0, NULL,
-					&kernel_events[j]);
-		}
+		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
+				NULL, global_work_size, NULL, 0, NULL,
+				&kernel_events[j]);
 	}
 
 	clWaitForEvents(3, kernel_events);
@@ -174,19 +167,19 @@ void do_iteration(int i)
 	/* deconvolution part */
 	for (j = 0; j < 3; j++) {
 		clSetKernelArg(deconvolution_kernel[j], 0,
-				sizeof(cl_mem), &k_input_image);
+				sizeof(cl_mem), &k_input_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 1,
-				sizeof(cl_mem), &k_psf_image);
+				sizeof(cl_mem), &k_psf_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 2,
-				sizeof(cl_mem), &k_output_image);
+				sizeof(cl_mem), &k_output_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 3,
-				sizeof(cl_mem), &k_temp_image);
+				sizeof(cl_mem), &k_temp_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 4,
-				sizeof(cl_mem), &k_original_image);
+				sizeof(cl_mem), &k_original_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 5,
-				sizeof(cl_mem), &k_dimensions);
+				sizeof(cl_mem), &k_dimensions[j]);
 		clSetKernelArg(deconvolution_kernel[j], 6,
-				sizeof(cl_mem), &k_psf_dimensions);
+				sizeof(cl_mem), &k_psf_dimensions[j]);
 
 		clEnqueueNDRangeKernel(queue, deconvolution_kernel[j],
 				2, NULL, global_work_size, NULL, 0,

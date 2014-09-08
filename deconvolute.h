@@ -8,7 +8,7 @@
 #include "emalloc.h"
 
 #define OUT_FILENAME "deconvoluted_image.tif"
-#define N_ITERATIONS 1
+#define N_ITERATIONS 10
 
 int width, height; /* dimensions of image to be deconvoluted */
 int *dimensions; /* same thing, but suitable for copying to opencl */
