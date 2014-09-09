@@ -47,9 +47,10 @@ cl_event kernel_events[3];
 
 /* implementation */
 
-/* malloc all images and read in input image and psf
-   also normalizes the psf with the variable total[3]
-   by channel
+/*
+ * malloc all images and read in input image and psf
+ * also normalizes the psf with the variable total[3]
+ * by channel
  */
 void init_images(char *input_image_filename, char *psf_image_filename)
 {
@@ -128,9 +129,10 @@ void chunk_image()
 	}
 }
 
-/* helper function to do the copying into chunks 
-   x, y index which chunk it is, i.e. chunk id
-   c is channel, RGB
+/*
+ * helper function to do the copying into chunks
+ * x, y index which chunk it is, i.e. chunk id
+ * c is channel, RGB
  */
 void copy_input_image_to_chunk(int x, int y, int c)
 {
@@ -180,8 +182,10 @@ void unchunk_image()
 	}
 }
 
-/* only use centers of chunk image unless on the edge or corners, hence
- * the 8 separate cases */
+/*
+ * only use centers of chunk image unless on the edge or corners, hence
+ * the 8 separate cases
+ */
 void copy_chunk_to_output_image(int x, int y, int c)
 {
 	int i, j;
@@ -431,7 +435,7 @@ void cleanup()
 		free(normalized_psf_image[i]);
 		free(normalized_output_image[i]);
 	}
-	
+
 	/* free opencl things */
 	free(global_work_size);
 
@@ -451,9 +455,10 @@ void cleanup()
 	clReleaseContext(context);
 }
 
-/* argv[1] = image to be deconvoluted, 16-bits per channel
-   argv[2] = psf image, 8-bits per channel (due to GIMP limitations)
-   argv[3] = number of iterations to run
+/*
+ * argv[1] = image to be deconvoluted, 16-bits per channel
+ * argv[2] = psf image, 8-bits per channel (due to GIMP limitations)
+ * argv[3] = number of iterations to run
  */
 int main(int argc, char *argv[])
 {
@@ -471,7 +476,7 @@ int main(int argc, char *argv[])
 	/* get images, alloc memory, and split into chunks */
 	init_images(argv[1], argv[2]);
 	chunk_image();
-	
+
 	/* setup opencl stuffies */
 	cl_utils_setup_gpu(&context, &queue, &device);
 	program = cl_utils_create_program("deconvolute.cl", context, device);

@@ -1,7 +1,9 @@
 #include "opencl_utils.h"
 
-/* reads a file and returns a malloced char* of its contents
-   that needs to freed */
+/*
+ * reads a file and returns a malloced char* of its contents
+ * that needs to freed
+ */
 char *cl_utils_read_file(char *filename)
 {
 	FILE *file;

@@ -1,9 +1,10 @@
 #include "tiff_goodness.h"
 
-/* read tiff, assumes tiff file has 3 channels per pixel, RGB,
-   with 16-bit channels
-
-   returns a malloced uint16_t* that needs to be freed
+/*
+ * read tiff, assumes tiff file has 3 channels per pixel, RGB,
+ * with 16-bit channels
+ *
+ * returns a malloced uint16_t* that needs to be freed
  */
 uint16_t *read_tiff(char *filename, int *width, int *height)
 {
@@ -46,10 +47,11 @@ uint16_t *read_tiff(char *filename, int *width, int *height)
 	return result;
 }
 
-/* read tiff, assumes tiff file has 3 channels per pixel, RGB,
-   with 8-bit channels
-
-   returns a malloced uint8_t* that needs to be freed
+/*
+ * read tiff, assumes tiff file has 3 channels per pixel, RGB,
+ * with 8-bit channels
+ *
+ * returns a malloced uint8_t* that needs to be freed
  */
 uint8_t *read_tiff8(char *filename, int *width, int *height)
 {
