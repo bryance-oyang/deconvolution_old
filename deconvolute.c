@@ -43,6 +43,7 @@ void init_images(char *input_image_filename, char *psf_image_filename)
 	}
 }
 
+/* split image into CHUNK_SIZE x CHUNK_SIZE chunks */
 void chunk_image()
 {
 	int c, x, y;
@@ -80,6 +81,10 @@ void chunk_image()
 	}
 }
 
+/* helper function to do the copying into chunks 
+   x, y index which chunk it is, i.e. chunk id
+   c is channel, RGB
+ */
 void copy_input_image_to_chunk(int x, int y, int c)
 {
 	int i, j;
@@ -111,6 +116,7 @@ void copy_input_image_to_chunk(int x, int y, int c)
 	}
 }
 
+/* piece image chunks back together */
 void unchunk_image()
 {
 	int x, y, c;
@@ -127,6 +133,8 @@ void unchunk_image()
 	}
 }
 
+/* only use centers of chunk image unless on the edge or corners, hence
+ * the 8 separate cases */
 void copy_chunk_to_output_image(int x, int y, int c)
 {
 	int i, j;
