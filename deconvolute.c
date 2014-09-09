@@ -1,5 +1,52 @@
 #include "deconvolute.h"
 
+/* define global variables */
+
+#define OUT_FILENAME "deconvoluted_image.tif"
+/* must be divisible by 4 */
+#define CHUNK_SIZE 256
+/* add the following constant to images to make sure there are no true
+ * black pixels 0 that could cause div by 0 problems */
+#define DIV_BY_ZERO_PREVENTION FLT_EPSILON
+
+int n_iterations;
+
+float ***chunks;
+int chunk_size;
+int n_chunks_x, n_chunks_y;
+
+int width, height; /* dimensions of image to be deconvoluted */
+int psf_width, psf_height; /* dimensions of psf */
+uint16_t *input_image; /* image to be deconvoluted in RGBRGBRGB format */
+uint8_t *psf_image;
+uint16_t *output_image; /* deconvoluted image in RGBRGBRGB format */
+/* converted to float images, each channel (RGB) is an array,
+   i.e. normalized_input_image[3][width * height]
+ */
+float *normalized_input_image[3];
+float *normalized_psf_image[3];
+float *normalized_output_image[3];
+
+/* opencl vars */
+size_t *global_work_size;
+cl_device_id device;
+cl_context context;
+cl_command_queue queue;
+cl_program program;
+cl_kernel convolution_kernel[3];
+cl_kernel deconvolution_kernel[3];
+/* opencl memory to store images */
+cl_mem k_image_a[3];
+cl_mem k_image_b[3];
+cl_mem k_original_image[3];
+cl_mem k_psf_image[3];
+cl_mem k_temp_image[3];
+/* events to wait on (sync) */
+cl_event copy_events[3][3]; /* 0: image_a, 1: original, 2: psf */
+cl_event kernel_events[3];
+
+/* implementation */
+
 /* malloc all images and read in input image and psf
    also normalizes the psf with the variable total[3]
    by channel
