@@ -37,6 +37,141 @@ void init_images(char *input_image_filename, char *psf_image_filename)
 	}
 }
 
+void chunk_image()
+{
+	int c, x, y;
+	int index;
+
+	chunk_size = CHUNK_SIZE;
+
+	n_chunks_x = (width - chunk_size)/(chunk_size/2) + 1;
+	if ((width - chunk_size) % (chunk_size/2) != 0) {
+		n_chunks_x += 1;
+	}
+
+	n_chunks_y = (height - chunk_size)/(chunk_size/2) + 1;
+	if ((height - chunk_size) % (chunk_size/2) != 0) {
+		n_chunks_y += 1;
+	}
+
+	chunks = emalloc(n_chunks_x * n_chunks_y * sizeof(*chunks));
+
+	for (x = 0; x < n_chunks_x; x++) {
+		for (y = 0; y < n_chunks_y; y++) {
+			index = y * n_chunks_x + x;
+			chunks[index] = emalloc(3 *
+					sizeof(*chunks[index]));
+
+			for (c = 0; c < 3; c++) {
+				copy_input_image_to_chunk(x, y, c);
+			}
+		}
+	}
+}
+
+void copy_input_image_to_chunk(int x, int y, int c)
+{
+	int i, j;
+	int chunk_index;
+	int image_i, image_j;
+	int image_index;
+	float *current;
+
+	chunks[y * n_chunks_x + x][c] = emalloc(chunk_size * chunk_size
+			* sizeof(*(chunks[y * n_chunks_x + x][c])));
+	current = chunks[y * n_chunks_x + x][c];
+
+	for (i = 0; i < chunk_size; i++) {
+		for (j = 0; j < chunk_size; j++) {
+			chunk_index = j * chunk_size + i;
+
+			image_i = x*chunk_size/2 + i;
+			image_j = y*chunk_size/2 + j;
+
+			if ((image_i >= width) || (image_j >= height)) {
+				current[chunk_index] = 0;
+			} else {
+				image_index = image_j * width + image_i;
+				current[chunk_index] =
+					normalized_input_image[c][image_index];
+			}
+		}
+	}
+}
+
+void unchunk_image()
+{
+	int x, y, c;
+
+	for (x = 0; x < n_chunks_x; x++) {
+		for (y = 0; y < n_chunks_y; y++) {
+			for (c = 0; c < 3; c++) {
+				copy_chunk_to_output_image(x, y, c);
+			}
+		}
+	}
+}
+
+void copy_chunk_to_output_image(int x, int y, int c)
+{
+	int i, j;
+	int chunk_index;
+	int image_i, image_j;
+	int image_index;
+	int lbound_x, lbound_y, ubound_x, ubound_y;
+	float *current;
+
+	current = chunks[y * n_chunks_x + x][c];
+
+	/* determine bounds for loop to make sure edge pixels get copied
+	 * otherwise will only copy center of images */
+	lbound_x = chunk_size/4;
+	lbound_y = chunk_size/4;
+	ubound_x = 3 * chunk_size/4;
+	ubound_y = 3 * chunk_size/4;
+	if (x == 0 && y == 0) { /* upper left */
+		lbound_x = 0;
+		lbound_y = 0;
+	} else if (x == 0 && y != 0 && y != n_chunks_y - 1) { /* flush left */
+		lbound_x = 0;
+	} else if (x == 0 && y == n_chunks_y - 1) { /* lower left */
+		lbound_x = 0;
+		ubound_y = chunk_size;
+	} else if (x != 0 && x != n_chunks_x - 1 &&
+			y == n_chunks_y - 1) { /* flush bottom */
+		ubound_y = chunk_size;
+	} else if (x == n_chunks_x - 1 &&
+			y == n_chunks_y - 1) { /* lower right */
+		ubound_x = chunk_size;
+		ubound_y = chunk_size;
+	} else if (x == n_chunks_x - 1 && y != 0 &&
+			y != n_chunks_y - 1) { /* flush right */
+		ubound_x = chunk_size;
+	} else if (x == n_chunks_x - 1 && y == 0) { /* upper right */
+		ubound_x = chunk_size;
+		lbound_y = 0;
+	} else if (x != 0 && x != n_chunks_x - 1 && y == 0) { /* flush top */
+		lbound_y = 0;
+	}
+
+	for (i = lbound_x; i < ubound_x; i++) {
+		for (j = lbound_y; j < ubound_y; j++) {
+			image_i = x * chunk_size/2 + i;
+			image_j = y * chunk_size/2 + j;
+
+			if ((image_i >= width) || (image_j >= height)) {
+				continue;
+			}
+
+			chunk_index = j * chunk_size + i;
+			image_index = image_j * width + image_i;
+
+			normalized_output_image[c][image_index]
+				= current[chunk_index];
+		}
+	}
+}
+
 /* write the resulting deconvoluted 16-bit TIFF image */
 void output(char *output_image_filename)
 {
@@ -68,14 +203,6 @@ void copy_images_to_opencl()
 {
 	int i;
 
-	dimensions = emalloc(2 * sizeof(*dimensions));
-	psf_dimensions = emalloc(2 * sizeof(*psf_dimensions));
-
-	dimensions[0] = width;
-	dimensions[1] = height;
-	psf_dimensions[0] = psf_width;
-	psf_dimensions[1] = psf_height;
-
 	for (i = 0; i < 3; i++) {
 		k_image_a[i] = clCreateBuffer(context,
 				CL_MEM_READ_WRITE, width * height *
@@ -92,12 +219,6 @@ void copy_images_to_opencl()
 		k_temp_image[i] = clCreateBuffer(context,
 				CL_MEM_READ_WRITE, width * height *
 				sizeof(cl_float), NULL, NULL);
-		k_dimensions[i] = clCreateBuffer(context,
-				CL_MEM_READ_ONLY, 2 * sizeof(cl_int),
-				NULL, NULL);
-		k_psf_dimensions[i] = clCreateBuffer(context,
-				CL_MEM_READ_ONLY, 2 * sizeof(cl_int),
-				NULL, NULL);
 
 		clEnqueueWriteBuffer(queue, k_image_a[i], CL_TRUE, 0,
 				width * height * sizeof(cl_float),
@@ -112,14 +233,8 @@ void copy_images_to_opencl()
 				psf_width * psf_height * sizeof(cl_float),
 				normalized_psf_image[i], 0, NULL,
 				&copy_events[i][2]);
-		clEnqueueWriteBuffer(queue, k_dimensions[i], CL_FALSE,
-				0, 2 * sizeof(cl_int), dimensions, 0,
-				NULL, &copy_events[i][3]);
-		clEnqueueWriteBuffer(queue, k_psf_dimensions[i], CL_FALSE,
-				0, 2 * sizeof(cl_int), psf_dimensions, 0,
-				NULL, &copy_events[i][4]);
 
-		clWaitForEvents(5, copy_events[i]);
+		clWaitForEvents(3, copy_events[i]);
 	}
 
 }
@@ -146,14 +261,18 @@ void do_iteration(int i)
 				&k_psf_image[j]);
 		clSetKernelArg(convolution_kernel[j], 2, sizeof(cl_mem),
 				&k_temp_image[j]);
-		clSetKernelArg(convolution_kernel[j], 3, sizeof(cl_mem),
-				&k_dimensions[j]);
-		clSetKernelArg(convolution_kernel[j], 4, sizeof(cl_mem),
-				&k_psf_dimensions[j]);
+		clSetKernelArg(convolution_kernel[j], 3, sizeof(cl_int),
+				&width);
+		clSetKernelArg(convolution_kernel[j], 4, sizeof(cl_int),
+				&height);
+		clSetKernelArg(convolution_kernel[j], 5, sizeof(cl_int),
+				&psf_width);
+		clSetKernelArg(convolution_kernel[j], 6, sizeof(cl_int),
+				&psf_height);
 
 		clEnqueueNDRangeKernel(queue, convolution_kernel[j], 2,
-				NULL, global_work_size, local_work_size,
-				0, NULL, &kernel_events[j]);
+				NULL, global_work_size, NULL, 0, NULL,
+				&kernel_events[j]);
 	}
 
 	clWaitForEvents(3, kernel_events);
@@ -170,15 +289,18 @@ void do_iteration(int i)
 				sizeof(cl_mem), &k_temp_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 4,
 				sizeof(cl_mem), &k_original_image[j]);
-		clSetKernelArg(deconvolution_kernel[j], 5,
-				sizeof(cl_mem), &k_dimensions[j]);
-		clSetKernelArg(deconvolution_kernel[j], 6,
-				sizeof(cl_mem), &k_psf_dimensions[j]);
+		clSetKernelArg(deconvolution_kernel[j], 5, sizeof(cl_int),
+				&width);
+		clSetKernelArg(deconvolution_kernel[j], 6, sizeof(cl_int),
+				&height);
+		clSetKernelArg(deconvolution_kernel[j], 7, sizeof(cl_int),
+				&psf_width);
+		clSetKernelArg(deconvolution_kernel[j], 8, sizeof(cl_int),
+				&psf_height);
 
 		clEnqueueNDRangeKernel(queue, deconvolution_kernel[j],
-				2, NULL, global_work_size,
-				local_work_size, 0, NULL,
-				&kernel_events[j]);
+				2, NULL, global_work_size, NULL, 0,
+				NULL, &kernel_events[j]);
 	}
 
 	clWaitForEvents(3, kernel_events);
@@ -187,9 +309,17 @@ void do_iteration(int i)
 /* free all the things */
 void cleanup()
 {
-	int i;
+	int i, j;
 
 	/* free images */
+	for (i = 0; i < n_chunks_x * n_chunks_y; i++) {
+		for (j = 0; j < 3; j++) {
+			free(chunks[i][j]);
+		}
+		free(chunks[i]);
+	}
+	free(chunks);
+
 	free(input_image);
 	free(psf_image);
 	free(output_image);
@@ -199,9 +329,6 @@ void cleanup()
 		free(normalized_output_image[i]);
 	}
 	
-	free(dimensions);
-	free(psf_dimensions);
-
 	/* free opencl things */
 	free(global_work_size);
 
@@ -214,8 +341,6 @@ void cleanup()
 		clReleaseMemObject(k_original_image[i]);
 		clReleaseMemObject(k_psf_image[i]);
 		clReleaseMemObject(k_temp_image[i]);
-		clReleaseMemObject(k_dimensions[i]);
-		clReleaseMemObject(k_psf_dimensions[i]);
 	}
 
 	clReleaseProgram(program);
@@ -259,9 +384,6 @@ int main(int argc, char *argv[])
 	global_work_size = emalloc(2 * sizeof(*global_work_size));
 	global_work_size[0] = width;
 	global_work_size[1] = height;
-	local_work_size = emalloc(2 * sizeof(*local_work_size));
-	local_work_size[0] = WORK_GRP_SIZE;
-	local_work_size[1] = WORK_GRP_SIZE;
 	for (i = 0; i < n_iterations; i++) {
 		do_iteration(i);
 		printf("Pass %d completed\n", i);

@@ -9,12 +9,13 @@
 
 #define OUT_FILENAME "deconvoluted_image.tif"
 #define CHUNK_SIZE 256
-#define WORK_GRP_SIZE 32
+
+float ***chunks;
+int chunk_size;
+int n_chunks_x, n_chunks_y;
 
 int width, height; /* dimensions of image to be deconvoluted */
-int *dimensions; /* same thing, but suitable for copying to opencl */
 int psf_width, psf_height; /* dimensions of psf */
-int *psf_dimensions; /* same thing, but suitable for copying to opencl */
 uint16_t *input_image; /* image to be deconvoluted in RGBRGBRGB format */
 uint8_t *psf_image;
 uint16_t *output_image; /* deconvoluted image in RGBRGBRGB format */
@@ -27,7 +28,6 @@ float *normalized_output_image[3];
 
 /* opencl vars */
 size_t *global_work_size;
-size_t *local_work_size;
 cl_device_id device;
 cl_context context;
 cl_command_queue queue;
@@ -40,14 +40,16 @@ cl_mem k_image_b[3];
 cl_mem k_original_image[3];
 cl_mem k_psf_image[3];
 cl_mem k_temp_image[3];
-cl_mem k_dimensions[3];
-cl_mem k_psf_dimensions[3];
 /* events to wait on (sync) */
-cl_event copy_events[3][5];
+cl_event copy_events[3][3];
 cl_event kernel_events[3];
 
 /* helper functions */
 void init_images(char *input_image_filename, char *psf_image_filename);
+void chunk_image();
+void copy_input_image_to_chunk(int x, int y, int c);
+void unchunk_image();
+void copy_chunk_to_output_image(int x, int y, int c);
 void output(char *output_image_filename);
 void copy_images_to_opencl();
 void do_iteration(int i);
