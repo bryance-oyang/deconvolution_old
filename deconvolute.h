@@ -10,6 +10,8 @@
 #define OUT_FILENAME "deconvoluted_image.tif"
 #define CHUNK_SIZE 256
 
+int n_iterations;
+
 float ***chunks;
 int chunk_size;
 int n_chunks_x, n_chunks_y;
@@ -41,7 +43,7 @@ cl_mem k_original_image[3];
 cl_mem k_psf_image[3];
 cl_mem k_temp_image[3];
 /* events to wait on (sync) */
-cl_event copy_events[3][3];
+cl_event copy_events[3][3]; /* 0: image_a, 1: original, 2: psf */
 cl_event kernel_events[3];
 
 /* helper functions */
@@ -51,7 +53,8 @@ void copy_input_image_to_chunk(int x, int y, int c);
 void unchunk_image();
 void copy_chunk_to_output_image(int x, int y, int c);
 void output(char *output_image_filename);
-void copy_images_to_opencl();
+void allocate_opencl_buffers();
+void deconvolute_chunk(int chunk_index);
 void do_iteration(int i);
 void cleanup();
 

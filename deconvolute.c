@@ -8,6 +8,9 @@ void init_images(char *input_image_filename, char *psf_image_filename)
 {
 	int i;
 
+	printf("\nInitializing images...\n");
+	fflush(stdout);
+
 	input_image = read_tiff(input_image_filename, &width, &height);
 	psf_image = read_tiff8(psf_image_filename, &psf_width, &psf_height);
 	output_image = emalloc(3 * width * height *
@@ -53,6 +56,11 @@ void chunk_image()
 	if ((height - chunk_size) % (chunk_size/2) != 0) {
 		n_chunks_y += 1;
 	}
+
+	printf("\nChunking image...\ntotal chunks: %d\nn_chunks_x: %d\nn_chunks_y: %d\nchunk_size: %d\n",
+			n_chunks_x * n_chunks_y, n_chunks_x, n_chunks_y,
+			chunk_size);
+	fflush(stdout);
 
 	chunks = emalloc(n_chunks_x * n_chunks_y * sizeof(*chunks));
 
@@ -102,6 +110,9 @@ void copy_input_image_to_chunk(int x, int y, int c)
 void unchunk_image()
 {
 	int x, y, c;
+
+	printf("\nUnchunking image...\n");
+	fflush(stdout);
 
 	for (x = 0; x < n_chunks_x; x++) {
 		for (y = 0; y < n_chunks_y; y++) {
@@ -177,14 +188,8 @@ void output(char *output_image_filename)
 {
 	int i;
 
-	/* retrieve result from opencl memory */
-	for (i = 0; i < 3; i++) {
-		clEnqueueReadBuffer(queue, k_image_a[i], CL_TRUE, 0,
-				width * height
-				* sizeof(cl_float),
-				normalized_output_image[i], 0,
-				NULL, NULL);
-	}
+	printf("\nOutputting final image...\n");
+	fflush(stdout);
 
 	/* convert floats to uint16_t for tiff output */
 	for (i = 0; i < 3 * width * height; i++) {
@@ -199,44 +204,78 @@ void output(char *output_image_filename)
 	write_tiff(output_image_filename, output_image, width, height);
 }
 
-void copy_images_to_opencl()
+/* also copies psf image over to opencl buffer */
+void allocate_opencl_buffers()
 {
 	int i;
 
 	for (i = 0; i < 3; i++) {
 		k_image_a[i] = clCreateBuffer(context,
-				CL_MEM_READ_WRITE, width * height *
-				sizeof(cl_float), NULL, NULL);
+				CL_MEM_READ_WRITE, chunk_size *
+				chunk_size * sizeof(cl_float), NULL,
+				NULL);
 		k_image_b[i] = clCreateBuffer(context,
-				CL_MEM_READ_WRITE, width * height *
-				sizeof(cl_float), NULL, NULL);
+				CL_MEM_READ_WRITE, chunk_size *
+				chunk_size * sizeof(cl_float), NULL,
+				NULL);
 		k_original_image[i] = clCreateBuffer(context,
-				CL_MEM_READ_ONLY, width * height *
-				sizeof(cl_float), NULL, NULL);
+				CL_MEM_READ_ONLY, chunk_size *
+				chunk_size * sizeof(cl_float), NULL,
+				NULL);
 		k_psf_image[i] = clCreateBuffer(context,
 				CL_MEM_READ_ONLY, psf_width * psf_height
 				* sizeof(cl_float), NULL, NULL);
 		k_temp_image[i] = clCreateBuffer(context,
-				CL_MEM_READ_WRITE, width * height *
-				sizeof(cl_float), NULL, NULL);
+				CL_MEM_READ_WRITE, chunk_size *
+				chunk_size * sizeof(cl_float), NULL,
+				NULL);
 
-		clEnqueueWriteBuffer(queue, k_image_a[i], CL_TRUE, 0,
-				width * height * sizeof(cl_float),
-				normalized_input_image[i], 0, NULL,
-				&copy_events[i][0]);
-		clEnqueueWriteBuffer(queue, k_original_image[i],
-				CL_FALSE, 0, width * height *
-				sizeof(cl_float),
-				normalized_input_image[i], 0, NULL,
-				&copy_events[i][1]);
 		clEnqueueWriteBuffer(queue, k_psf_image[i], CL_FALSE, 0,
 				psf_width * psf_height * sizeof(cl_float),
 				normalized_psf_image[i], 0, NULL,
 				&copy_events[i][2]);
+	}
+
+}
+
+void deconvolute_chunk(int chunk_index)
+{
+	int i;
+	float *current;
+
+	printf("Deconvoluting chunk: %d\n", chunk_index);
+	fflush(stdout);
+
+	/* copy image (RGB) into opencl buffer */
+	for (i = 0; i < 3; i++) {
+		current = chunks[chunk_index][i];
+
+		clEnqueueWriteBuffer(queue, k_image_a[i], CL_TRUE, 0,
+				chunk_size * chunk_size *
+				sizeof(cl_float), current, 0, NULL,
+				&copy_events[i][0]);
+		clEnqueueWriteBuffer(queue, k_original_image[i],
+				CL_FALSE, 0, chunk_size * chunk_size *
+				sizeof(cl_float), current, 0, NULL,
+				&copy_events[i][1]);
 
 		clWaitForEvents(3, copy_events[i]);
 	}
 
+	/* run the deconvolution on this chunk */
+	for (i = 0; i < n_iterations; i++) {
+		do_iteration(i);
+	}
+
+	/* copy results back */
+	for (i = 0; i < 3; i++) {
+		current = chunks[chunk_index][i];
+
+		clEnqueueReadBuffer(queue, k_image_a[i], CL_TRUE, 0,
+				chunk_size * chunk_size *
+				sizeof(cl_float), current, 0, NULL,
+				NULL);
+	}
 }
 
 void do_iteration(int i)
@@ -262,9 +301,9 @@ void do_iteration(int i)
 		clSetKernelArg(convolution_kernel[j], 2, sizeof(cl_mem),
 				&k_temp_image[j]);
 		clSetKernelArg(convolution_kernel[j], 3, sizeof(cl_int),
-				&width);
+				&chunk_size);
 		clSetKernelArg(convolution_kernel[j], 4, sizeof(cl_int),
-				&height);
+				&chunk_size);
 		clSetKernelArg(convolution_kernel[j], 5, sizeof(cl_int),
 				&psf_width);
 		clSetKernelArg(convolution_kernel[j], 6, sizeof(cl_int),
@@ -290,9 +329,9 @@ void do_iteration(int i)
 		clSetKernelArg(deconvolution_kernel[j], 4,
 				sizeof(cl_mem), &k_original_image[j]);
 		clSetKernelArg(deconvolution_kernel[j], 5, sizeof(cl_int),
-				&width);
+				&chunk_size);
 		clSetKernelArg(deconvolution_kernel[j], 6, sizeof(cl_int),
-				&height);
+				&chunk_size);
 		clSetKernelArg(deconvolution_kernel[j], 7, sizeof(cl_int),
 				&psf_width);
 		clSetKernelArg(deconvolution_kernel[j], 8, sizeof(cl_int),
@@ -350,11 +389,11 @@ void cleanup()
 
 /* argv[1] = image to be deconvoluted, 16-bits per channel
    argv[2] = psf image, 8-bits per channel (due to GIMP limitations)
+   argv[3] = number of iterations to run
  */
 int main(int argc, char *argv[])
 {
 	int i;
-	int n_iterations;
 
 	if (argc != 4) {
 		fprintf(stderr, "Usage: deconvolute [input 16-bit TIFF image] [psf 8-bit TIFF image] [number of iterations]\n");
@@ -362,33 +401,35 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	/* make sure n_iterations is even */
+	/* force n_iterations to be even */
 	n_iterations = atoi(argv[3]) + (atoi(argv[3]) % 2);
 
-	/* get images and alloc memory */
+	/* get images, alloc memory, and split into chunks */
 	init_images(argv[1], argv[2]);
+	chunk_image();
 	
 	/* setup opencl stuffies */
 	cl_utils_setup_gpu(&context, &queue, &device);
-	program = cl_utils_create_program("deconvolute.cl", context,
-			device);
+	program = cl_utils_create_program("deconvolute.cl", context, device);
 	for (i = 0; i < 3; i++) {
 		convolution_kernel[i] = clCreateKernel(program, "convolute", NULL);
 		deconvolution_kernel[i] = clCreateKernel(program, "deconvolute", NULL);
 	}
 
-	/* alloc opencl memory and copy images over */
-	copy_images_to_opencl();
+	/* alloc opencl memory and copy psf over */
+	allocate_opencl_buffers();
 
 	/* do the main deconvolution computations */
 	global_work_size = emalloc(2 * sizeof(*global_work_size));
-	global_work_size[0] = width;
-	global_work_size[1] = height;
-	for (i = 0; i < n_iterations; i++) {
-		do_iteration(i);
-		printf("Pass %d completed\n", i);
-		fflush(stdout);
+	global_work_size[0] = CHUNK_SIZE;
+	global_work_size[1] = CHUNK_SIZE;
+	printf("\n");
+	for (i = 0; i < n_chunks_x * n_chunks_y; i++) {
+		deconvolute_chunk(i);
 	}
+
+	/* unchunk the image */
+	unchunk_image();
 
 	/* output */
 	output(OUT_FILENAME);
