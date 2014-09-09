@@ -3,12 +3,16 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <float.h>
 #include "tiff_goodness.h"
 #include "opencl_utils.h"
 #include "emalloc.h"
 
 #define OUT_FILENAME "deconvoluted_image.tif"
 #define CHUNK_SIZE 256
+/* add the following constant to images to make sure there are no true
+ * black pixels 0 that could cause div by 0 problems */
+#define DIV_BY_ZERO_PREVENTION FLT_EPSILON
 
 int n_iterations;
 

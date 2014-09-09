@@ -25,9 +25,12 @@ void init_images(char *input_image_filename, char *psf_image_filename)
 				sizeof(*(normalized_output_image[i])));
 	}
 
+	/* also add a background to make sure pixels are not 0
+	 * (black) or else we may encounter division by 0 */
 	for (i = 0; i < 3 * width * height; i++) {
 		normalized_input_image[i%3][i/3] =
-			(float)input_image[i]/UINT16_MAX;
+			(float)input_image[i]/UINT16_MAX
+			+ DIV_BY_ZERO_PREVENTION;
 	}
 
 	float total[] = {0, 0, 0};
@@ -97,7 +100,8 @@ void copy_input_image_to_chunk(int x, int y, int c)
 			image_j = y*chunk_size/2 + j;
 
 			if ((image_i >= width) || (image_j >= height)) {
-				current[chunk_index] = 0;
+				current[chunk_index] =
+					DIV_BY_ZERO_PREVENTION;
 			} else {
 				image_index = image_j * width + image_i;
 				current[chunk_index] =
@@ -193,6 +197,11 @@ void output(char *output_image_filename)
 
 	/* convert floats to uint16_t for tiff output */
 	for (i = 0; i < 3 * width * height; i++) {
+		/* earlier in init_images we added constant to prevent
+		 * possible division by 0 caused by black pixels */
+		normalized_output_image[i%3][i/3] -=
+			DIV_BY_ZERO_PREVENTION;
+
 		if (normalized_output_image[i%3][i/3] >= 1) {
 			output_image[i] = UINT16_MAX;
 		} else {
