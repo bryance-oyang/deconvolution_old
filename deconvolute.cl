@@ -29,6 +29,9 @@ __kernel void deconvolute(__global float *input_image, __global float
 			}
 			
 			index = j * width + i;
+			if (temp_image[index] == 0)
+				continue;
+
 			psf_index = psf_j * psf_width + psf_i;
 			total += psf_image[psf_index] *
 				original_image[index] /
